@@ -1,7 +1,7 @@
 # ============================================================
 # YASH WORLD - Premium Survey Application
 # Flask Version - Production Ready for Render
-# Enhanced with Persistent Storage & Mobile Optimization
+# Enhanced with Proper Cascade Deletion
 # ============================================================
 
 import os
@@ -29,7 +29,7 @@ logger = logging.getLogger(__name__)
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'yash-world-secret-key-2024')
 
-# Database configuration - Works with both SQLite (local) and PostgreSQL (Render)
+# Database configuration
 database_url = os.environ.get('DATABASE_URL')
 if database_url:
     if database_url.startswith('postgres://'):
@@ -49,7 +49,7 @@ ALLOWED_AUDIO = {'mp3', 'wav', 'ogg', 'm4a', 'mp4', 'aac', 'flac'}
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 app.config['MAX_CONTENT_LENGTH'] = 100 * 1024 * 1024  # 100MB max
 
-# Session configuration for mobile
+# Session configuration
 app.config['SESSION_COOKIE_SECURE'] = os.environ.get('SESSION_COOKIE_SECURE', 'False') == 'True'
 app.config['SESSION_COOKIE_HTTPONLY'] = True
 app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
@@ -145,6 +145,11 @@ class Question(db.Model):
     
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # Relationships with cascade delete
+    options = db.relationship('QuestionOption', backref='question', cascade='all, delete-orphan', lazy=True)
+    two_marks_answer = db.relationship('TwoMarksAnswer', backref='question', cascade='all, delete-orphan', uselist=False)
+    responses = db.relationship('UserResponse', backref='question', cascade='all, delete-orphan', lazy=True)
 
 class QuestionOption(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -155,8 +160,6 @@ class QuestionOption(db.Model):
     
     image = db.Column(db.String(500))
     video = db.Column(db.String(500))
-    
-    question = db.relationship('Question', backref='options')
 
 class TwoMarksAnswer(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -167,31 +170,28 @@ class TwoMarksAnswer(db.Model):
     image = db.Column(db.String(500))
     video = db.Column(db.String(500))
     audio = db.Column(db.String(500))
-    
-    question = db.relationship('Question', backref='two_marks_answer', uselist=False)
 
 class UserResponse(db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
-    question_id = db.Column(db.Integer, db.ForeignKey('question.id'), nullable=False)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id', ondelete='CASCADE'), nullable=False)
+    question_id = db.Column(db.Integer, db.ForeignKey('question.id', ondelete='CASCADE'), nullable=False)
     text_response = db.Column(db.Text)
     marks_earned = db.Column(db.Float, default=0)
     is_revealed = db.Column(db.Boolean, default=False)
-    time_spent = db.Column(db.Integer, default=0)  # Time spent in seconds
+    time_spent = db.Column(db.Integer, default=0)
     
     submitted_at = db.Column(db.DateTime, default=datetime.utcnow)
     
     user = db.relationship('User', backref='responses')
-    question = db.relationship('Question', backref='responses')
 
 user_response_options = db.Table('user_response_options',
-    db.Column('user_response_id', db.Integer, db.ForeignKey('user_response.id')),
-    db.Column('question_option_id', db.Integer, db.ForeignKey('question_option.id'))
+    db.Column('user_response_id', db.Integer, db.ForeignKey('user_response.id', ondelete='CASCADE')),
+    db.Column('question_option_id', db.Integer, db.ForeignKey('question_option.id', ondelete='CASCADE'))
 )
 
 class FinalFeedback(db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False, unique=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id', ondelete='CASCADE'), nullable=False, unique=True)
     rating = db.Column(db.String(20))
     liked = db.Column(db.Text)
     improvements = db.Column(db.Text)
@@ -211,17 +211,6 @@ class SiteSettings(db.Model):
     enable_typing = db.Column(db.Boolean, default=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-
-class UserSession(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
-    session_id = db.Column(db.String(200), nullable=False)
-    ip_address = db.Column(db.String(50))
-    user_agent = db.Column(db.String(500))
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    last_activity = db.Column(db.DateTime, default=datetime.utcnow)
-    
-    user = db.relationship('User', backref='sessions')
 
 # ============================================================
 # FILE UPLOAD HELPERS
@@ -268,6 +257,19 @@ def save_video(file, subfolder='videos'):
 def save_audio(file, subfolder='audio'):
     return save_file(file, subfolder, ALLOWED_AUDIO)
 
+def delete_media_file(file_path):
+    """Delete a media file from the server"""
+    if file_path:
+        full_path = os.path.join(app.config['UPLOAD_FOLDER'], file_path)
+        if os.path.exists(full_path):
+            try:
+                os.remove(full_path)
+                return True
+            except Exception as e:
+                logger.error(f"Error deleting file {full_path}: {e}")
+                return False
+    return False
+
 # ============================================================
 # LOGIN MANAGER
 # ============================================================
@@ -286,7 +288,7 @@ def admin_required(f):
     return decorated_function
 
 # ============================================================
-# CONTEXT PROCESSOR - For all templates
+# CONTEXT PROCESSOR
 # ============================================================
 
 @app.context_processor
@@ -325,19 +327,6 @@ def login():
             user.last_login = datetime.utcnow()
             db.session.commit()
             
-            # Log session
-            session_id = request.cookies.get('session', '')
-            if session_id:
-                user_session = UserSession(
-                    user_id=user.id,
-                    session_id=session_id,
-                    ip_address=request.remote_addr,
-                    user_agent=request.headers.get('User-Agent', ''),
-                    last_activity=datetime.utcnow()
-                )
-                db.session.add(user_session)
-                db.session.commit()
-            
             next_page = request.args.get('next')
             return redirect(next_page) if next_page else redirect(url_for('survey'))
         else:
@@ -348,12 +337,6 @@ def login():
 @app.route('/logout')
 @login_required
 def logout():
-    # Clear user session
-    session_id = request.cookies.get('session', '')
-    if session_id:
-        UserSession.query.filter_by(session_id=session_id).delete()
-        db.session.commit()
-    
     logout_user()
     session.clear()
     flash('You have been logged out.', 'info')
@@ -366,14 +349,6 @@ def logout():
 @app.route('/survey')
 @login_required
 def survey():
-    # Update last activity
-    session_id = request.cookies.get('session', '')
-    if session_id:
-        user_session = UserSession.query.filter_by(session_id=session_id).first()
-        if user_session:
-            user_session.last_activity = datetime.utcnow()
-            db.session.commit()
-    
     settings = SiteSettings.query.first()
     if not settings:
         settings = SiteSettings()
@@ -687,7 +662,6 @@ def admin_typing_text():
     if request.method == 'POST':
         text = request.form.get('typing_text', '').strip()
         if text:
-            # Deactivate all existing
             TypingText.query.update({TypingText.is_active: False})
             new_text = TypingText(text=text, is_active=True)
             db.session.add(new_text)
@@ -745,7 +719,6 @@ def admin_add_question():
         question.marks = int(request.form.get('marks', 1))
         question.order = int(request.form.get('order', 0))
         
-        # Validate
         if not question.text:
             flash('Question text is required.', 'danger')
             return redirect(request.url)
@@ -842,16 +815,23 @@ def admin_edit_question(question_id):
         question.order = int(request.form.get('order', 0))
         
         if 'image' in request.files and request.files['image'].filename:
+            # Delete old image
+            if question.image:
+                delete_media_file(question.image)
             path = save_image(request.files['image'], 'questions/images')
             if path:
                 question.image = path
         
         if 'video' in request.files and request.files['video'].filename:
+            if question.video:
+                delete_media_file(question.video)
             path = save_video(request.files['video'], 'questions/videos')
             if path:
                 question.video = path
         
         if 'audio' in request.files and request.files['audio'].filename:
+            if question.audio:
+                delete_media_file(question.audio)
             path = save_audio(request.files['audio'], 'questions/audio')
             if path:
                 question.audio = path
@@ -874,12 +854,48 @@ def admin_edit_question(question_id):
 @login_required
 @admin_required
 def admin_delete_question(question_id):
-    question = Question.query.get_or_404(question_id)
-    QuestionOption.query.filter_by(question_id=question_id).delete()
-    TwoMarksAnswer.query.filter_by(question_id=question_id).delete()
-    db.session.delete(question)
-    db.session.commit()
-    flash('Question deleted successfully!', 'success')
+    try:
+        question = Question.query.get_or_404(question_id)
+        
+        # Delete associated media files
+        if question.image:
+            delete_media_file(question.image)
+        if question.video:
+            delete_media_file(question.video)
+        if question.audio:
+            delete_media_file(question.audio)
+        
+        # Delete options and their media
+        options = QuestionOption.query.filter_by(question_id=question_id).all()
+        for option in options:
+            if option.image:
+                delete_media_file(option.image)
+            if option.video:
+                delete_media_file(option.video)
+        
+        # Delete 2 marks answer and its media
+        two_marks = TwoMarksAnswer.query.filter_by(question_id=question_id).first()
+        if two_marks:
+            if two_marks.image:
+                delete_media_file(two_marks.image)
+            if two_marks.video:
+                delete_media_file(two_marks.video)
+            if two_marks.audio:
+                delete_media_file(two_marks.audio)
+        
+        # Delete all responses for this question
+        UserResponse.query.filter_by(question_id=question_id).delete()
+        
+        # Delete the question (cascade will delete options and 2 marks)
+        db.session.delete(question)
+        db.session.commit()
+        
+        flash('Question and all associated data deleted successfully!', 'success')
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"Error deleting question {question_id}: {e}")
+        flash('Error deleting question. Please try again.', 'danger')
+    
     return redirect(url_for('admin_questions'))
 
 @app.route('/admin/options/add', methods=['POST'])
@@ -923,6 +939,13 @@ def admin_add_option():
 def admin_delete_option(option_id):
     option = QuestionOption.query.get_or_404(option_id)
     question_id = option.question_id
+    
+    # Delete media files
+    if option.image:
+        delete_media_file(option.image)
+    if option.video:
+        delete_media_file(option.video)
+    
     db.session.delete(option)
     db.session.commit()
     flash('Option deleted successfully!', 'success')
@@ -949,17 +972,23 @@ def admin_add_two_marks_answer():
         )
         db.session.add(answer)
     
-    if 'image' in request.files:
+    if 'image' in request.files and request.files['image'].filename:
+        if answer.image:
+            delete_media_file(answer.image)
         path = save_image(request.files['image'], 'answers/images')
         if path:
             answer.image = path
     
-    if 'video' in request.files:
+    if 'video' in request.files and request.files['video'].filename:
+        if answer.video:
+            delete_media_file(answer.video)
         path = save_video(request.files['video'], 'answers/videos')
         if path:
             answer.video = path
     
-    if 'audio' in request.files:
+    if 'audio' in request.files and request.files['audio'].filename:
+        if answer.audio:
+            delete_media_file(answer.audio)
         path = save_audio(request.files['audio'], 'answers/audio')
         if path:
             answer.audio = path
@@ -1019,6 +1048,11 @@ def admin_add_music():
 @admin_required
 def admin_delete_music(track_id):
     track = BackgroundMusic.query.get_or_404(track_id)
+    
+    # Delete the file
+    if track.file_path:
+        delete_media_file(track.file_path)
+    
     db.session.delete(track)
     db.session.commit()
     flash('Track deleted successfully!', 'success')
@@ -1113,24 +1147,23 @@ def forbidden(error):
     return render_template('error.html', error_code=403, message='Access denied'), 403
 
 # ============================================================
-# DATABASE INITIALIZATION - PERSISTENT DATA
+# DATABASE INITIALIZATION
 # ============================================================
 
 def init_db():
     with app.app_context():
-        # Create tables if they don't exist (does NOT delete data)
         db.create_all()
         
-        # Create admin user only if not exists
+        # Create admin user
         admin = User.query.filter_by(username='admin').first()
         if not admin:
             admin = User(username='admin', is_admin=True)
-            admin.set_password('msg123')
+            admin.set_password('admin123')
             db.session.add(admin)
             db.session.commit()
-            logger.info("✅ Admin user created: admin / msg123")
+            logger.info("✅ Admin user created: admin / admin123")
         
-        # Create test user (lory) only if not exists
+        # Create test user
         lory = User.query.filter_by(username='lory').first()
         if not lory:
             lory = User(username='lory', is_admin=False)
@@ -1139,7 +1172,7 @@ def init_db():
             db.session.commit()
             logger.info("✅ Test user created: lory / lory")
         
-        # Create default settings if not exists
+        # Create default settings
         settings = SiteSettings.query.first()
         if not settings:
             settings = SiteSettings(
@@ -1166,10 +1199,7 @@ def init_db():
 # ============================================================
 
 if __name__ == '__main__':
-    # Initialize database (creates tables if needed, no data deletion)
     init_db()
-    
-    # Run with production settings
     port = int(os.environ.get('PORT', 5000))
     debug = os.environ.get('FLASK_DEBUG', 'False') == 'True'
     app.run(debug=debug, host='0.0.0.0', port=port)
