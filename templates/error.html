@@ -1,0 +1,521 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="page active" id="errorPage">
+    <div class="error-container">
+        <!-- Error Icon -->
+        <div class="error-icon">
+            {% if error_code == 404 %}
+                🔍
+            {% elif error_code == 500 %}
+                ⚠️
+            elif error_code == 403 %}
+                🚫
+            elif error_code == 401 %}
+                🔒
+            else %}
+                ❌
+            {% endif %}
+        </div>
+        
+        <!-- Error Code -->
+        <h1 class="error-code">{{ error_code }}</h1>
+        
+        <!-- Error Message -->
+        <h2 class="error-title">
+            {% if error_code == 404 %}
+                Page Not Found
+            {% elif error_code == 500 %}
+                Internal Server Error
+            {% elif error_code == 403 %}
+                Access Denied
+            {% elif error_code == 401 %}
+                Unauthorized
+            {% else %}
+                Something Went Wrong
+            {% endif %}
+        </h2>
+        
+        <p class="error-message">{{ message }}</p>
+        
+        <!-- Error Details (for debugging) -->
+        {% if error_details %}
+        <div class="error-details">
+            <details>
+                <summary>Technical Details</summary>
+                <pre>{{ error_details }}</pre>
+            </details>
+        </div>
+        {% endif %}
+        
+        <!-- Action Buttons -->
+        <div class="error-actions">
+            <a href="{{ url_for('index') }}" class="error-btn primary">
+                🏠 Go Home
+            </a>
+            <a href="javascript:history.back()" class="error-btn secondary">
+                🔙 Go Back
+            </a>
+            {% if current_user.is_authenticated and current_user.is_admin %}
+            <a href="{{ url_for('admin_dashboard') }}" class="error-btn admin">
+                ⚙️ Admin Dashboard
+            </a>
+            {% endif %}
+        </div>
+        
+        <!-- Helpful Links -->
+        <div class="error-links">
+            <p>You might want to:</p>
+            <ul>
+                <li><a href="{{ url_for('index') }}">Return to homepage</a></li>
+                {% if current_user.is_authenticated %}
+                <li><a href="{{ url_for('survey') }}">Go to survey</a></li>
+                {% else %}
+                <li><a href="{{ url_for('login') }}">Login to your account</a></li>
+                {% endif %}
+                <li><a href="javascript:history.back()">Go back to previous page</a></li>
+            </ul>
+        </div>
+        
+        <!-- Fun Fact / Random Message -->
+        <div class="error-fact">
+            <p id="errorFact">💡 Did you know? Errors are just opportunities to learn!</p>
+        </div>
+    </div>
+</div>
+
+<style>
+/* ============================================
+   ERROR PAGE STYLES
+   ============================================ */
+#errorPage {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 60vh;
+    padding: 20px 0;
+}
+
+.error-container {
+    max-width: 600px;
+    width: 100%;
+    text-align: center;
+    padding: 40px 30px;
+    border-radius: 30px;
+    background: var(--bg-primary);
+    box-shadow: inset 4px 4px 8px var(--shadow-light), inset -4px -4px 8px var(--shadow-dark);
+}
+
+.error-icon {
+    font-size: 72px;
+    margin-bottom: 15px;
+    display: block;
+    animation: floatIcon 3s ease-in-out infinite;
+}
+
+@keyframes floatIcon {
+    0%, 100% { transform: translateY(0px) rotate(0deg); }
+    50% { transform: translateY(-15px) rotate(-5deg); }
+}
+
+.error-code {
+    font-size: 80px;
+    font-weight: 800;
+    color: var(--accent-blue);
+    margin: 10px 0;
+    text-shadow: -2px -2px 2px var(--shadow-dark), 2px 2px 3px var(--shadow-light);
+}
+
+.error-title {
+    font-size: 28px;
+    color: var(--text-secondary);
+    margin: 10px 0 15px 0;
+}
+
+.error-message {
+    font-size: 18px;
+    color: var(--text-muted);
+    line-height: 1.6;
+    margin-bottom: 25px;
+}
+
+.error-details {
+    margin: 20px 0;
+    text-align: left;
+}
+
+.error-details details {
+    padding: 15px 20px;
+    border-radius: 12px;
+    background: var(--bg-primary);
+    box-shadow: inset 4px 4px 8px var(--shadow-light), inset -4px -4px 8px var(--shadow-dark);
+}
+
+.error-details summary {
+    cursor: pointer;
+    font-weight: 600;
+    color: var(--text-secondary);
+    font-size: 14px;
+}
+
+.error-details pre {
+    margin-top: 10px;
+    padding: 15px;
+    border-radius: 8px;
+    background: var(--bg-primary);
+    box-shadow: inset 2px 2px 4px var(--shadow-light), inset -2px -2px 4px var(--shadow-dark);
+    font-size: 13px;
+    color: var(--text-muted);
+    overflow-x: auto;
+    white-space: pre-wrap;
+    word-break: break-all;
+    max-height: 200px;
+    overflow-y: auto;
+}
+
+/* Error Actions */
+.error-actions {
+    display: flex;
+    gap: 15px;
+    justify-content: center;
+    flex-wrap: wrap;
+    margin: 25px 0 20px 0;
+}
+
+.error-btn {
+    padding: 14px 30px;
+    border-radius: 16px;
+    font-size: 16px;
+    font-weight: 600;
+    font-family: var(--font-family);
+    border: none;
+    outline: none;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    box-shadow: 8px 8px 16px var(--shadow-light), -8px -8px 16px var(--shadow-dark);
+}
+
+.error-btn:hover {
+    transform: translateY(-3px);
+    text-decoration: none;
+}
+
+.error-btn.primary {
+    background: var(--accent-blue);
+    color: white;
+}
+
+.error-btn.secondary {
+    background: var(--bg-primary);
+    color: var(--text-secondary);
+}
+
+.error-btn.admin {
+    background: var(--accent-purple);
+    color: white;
+}
+
+/* Error Links */
+.error-links {
+    margin: 20px 0;
+    padding: 20px;
+    border-radius: 16px;
+    background: var(--bg-primary);
+    box-shadow: inset 4px 4px 8px var(--shadow-light), inset -4px -4px 8px var(--shadow-dark);
+}
+
+.error-links p {
+    font-weight: 600;
+    color: var(--text-secondary);
+    margin-bottom: 10px;
+}
+
+.error-links ul {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.error-links ul li {
+    margin: 8px 0;
+}
+
+.error-links ul li a {
+    color: var(--accent-blue);
+    text-decoration: none;
+    font-size: 15px;
+    transition: color 0.3s ease;
+}
+
+.error-links ul li a:hover {
+    color: var(--accent-purple);
+    text-decoration: underline;
+}
+
+/* Error Fact */
+.error-fact {
+    margin-top: 20px;
+    padding: 15px 20px;
+    border-radius: 12px;
+    background: var(--bg-primary);
+    box-shadow: inset 4px 4px 8px var(--shadow-light), inset -4px -4px 8px var(--shadow-dark);
+}
+
+.error-fact p {
+    font-size: 14px;
+    color: var(--text-muted);
+    font-style: italic;
+    margin: 0;
+}
+
+/* ============================================
+   RESPONSIVE DESIGN
+   ============================================ */
+@media (max-width: 768px) {
+    .error-container {
+        padding: 30px 20px;
+    }
+    
+    .error-icon {
+        font-size: 56px;
+    }
+    
+    .error-code {
+        font-size: 60px;
+    }
+    
+    .error-title {
+        font-size: 24px;
+    }
+    
+    .error-message {
+        font-size: 16px;
+    }
+    
+    .error-btn {
+        padding: 12px 24px;
+        font-size: 15px;
+        width: 100%;
+        justify-content: center;
+    }
+    
+    .error-actions {
+        flex-direction: column;
+        gap: 10px;
+    }
+}
+
+@media (max-width: 480px) {
+    .error-container {
+        padding: 20px 15px;
+        border-radius: 20px;
+    }
+    
+    .error-icon {
+        font-size: 44px;
+    }
+    
+    .error-code {
+        font-size: 48px;
+    }
+    
+    .error-title {
+        font-size: 20px;
+    }
+    
+    .error-message {
+        font-size: 15px;
+    }
+    
+    .error-btn {
+        padding: 12px 20px;
+        font-size: 14px;
+    }
+    
+    .error-links ul li a {
+        font-size: 14px;
+    }
+}
+
+/* Animation for error page */
+@keyframes fadeInScale {
+    from {
+        opacity: 0;
+        transform: scale(0.95) translateY(20px);
+    }
+    to {
+        opacity: 1;
+        transform: scale(1) translateY(0);
+    }
+}
+
+#errorPage {
+    animation: fadeInScale 0.5s ease-out;
+}
+</style>
+
+<script>
+// ============================================
+// RANDOM ERROR FACTS
+// ============================================
+const errorFacts = [
+    "💡 Did you know? Errors are just opportunities to learn!",
+    "🔧 Every error is a step closer to a solution.",
+    "🧠 The best developers learn from their errors.",
+    "🌟 Even the best apps have errors sometimes.",
+    "💪 Don't let errors discourage you - they make you stronger!",
+    "🎯 Finding errors is the first step to fixing them.",
+    "🚀 Every great app started with many errors.",
+    "📚 Errors teach us what doesn't work, so we can find what does.",
+    "🧩 Debugging is like solving a puzzle - each error is a piece.",
+    "⭐ The error is temporary, but the solution is forever."
+];
+
+document.addEventListener('DOMContentLoaded', function() {
+    const factElement = document.getElementById('errorFact');
+    if (factElement) {
+        const randomIndex = Math.floor(Math.random() * errorFacts.length);
+        factElement.textContent = errorFacts[randomIndex];
+    }
+});
+
+// ============================================
+// ERROR PAGE INTERACTIONS
+// ============================================
+document.addEventListener('DOMContentLoaded', function() {
+    // Double-click on error icon for easter egg
+    const icon = document.querySelector('.error-icon');
+    if (icon) {
+        icon.addEventListener('dblclick', function() {
+            this.style.transform = 'scale(1.5) rotate(180deg)';
+            this.style.transition = 'all 0.5s ease';
+            setTimeout(() => {
+                this.style.transform = '';
+            }, 1000);
+        });
+    }
+    
+    // Click on error code for fun
+    const code = document.querySelector('.error-code');
+    if (code) {
+        code.addEventListener('click', function() {
+            const currentText = this.textContent;
+            const emojis = ['🔥', '💫', '✨', '🌟', '⭐'];
+            const randomEmoji = emojis[Math.floor(Math.random() * emojis.length)];
+            this.textContent = randomEmoji + ' ' + currentText + ' ' + randomEmoji;
+            this.style.transition = 'all 0.3s ease';
+            this.style.transform = 'scale(1.1)';
+            setTimeout(() => {
+                this.style.transform = '';
+            }, 300);
+        });
+    }
+});
+
+// ============================================
+// AUTO-REFRESH FOR 5XX ERRORS
+// ============================================
+document.addEventListener('DOMContentLoaded', function() {
+    const errorCode = {{ error_code|default(500) }};
+    
+    // Auto-refresh after 30 seconds for 500 errors
+    if (errorCode >= 500 && errorCode < 600) {
+        const errorBtn = document.querySelector('.error-btn.primary');
+        if (errorBtn) {
+            errorBtn.textContent = '🔄 Retry';
+            errorBtn.href = 'javascript:location.reload()';
+        }
+        
+        // Show countdown to auto-refresh
+        const message = document.querySelector('.error-message');
+        if (message) {
+            let countdown = 30;
+            const originalText = message.textContent;
+            message.textContent = originalText + ` (Auto-retry in ${countdown}s)`;
+            
+            const interval = setInterval(() => {
+                countdown--;
+                if (countdown > 0) {
+                    message.textContent = originalText + ` (Auto-retry in ${countdown}s)`;
+                } else {
+                    clearInterval(interval);
+                    message.textContent = originalText + ' (Retrying...)';
+                    setTimeout(() => {
+                        location.reload();
+                    }, 1000);
+                }
+            }, 1000);
+        }
+    }
+});
+
+// ============================================
+// ERROR REPORTING (Optional)
+// ============================================
+function reportError(errorCode, message, details) {
+    // You can implement error reporting to a backend service here
+    console.log('Error Report:', {
+        code: errorCode,
+        message: message,
+        details: details,
+        timestamp: new Date().toISOString(),
+        user: '{{ current_user.username if current_user.is_authenticated else "anonymous" }}',
+        url: window.location.href,
+        userAgent: navigator.userAgent
+    });
+    
+    // Send to backend if needed
+    // fetch('/api/report-error', {
+    //     method: 'POST',
+    //     headers: { 'Content-Type': 'application/json' },
+    //     body: JSON.stringify(errorData)
+    // });
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+    const errorCode = {{ error_code|default(500) }};
+    const message = "{{ message|default('An error occurred') }}";
+    const details = "{{ error_details|default('') }}";
+    
+    reportError(errorCode, message, details);
+});
+
+// ============================================
+// KEYBOARD SHORTCUTS FOR ERROR PAGE
+// ============================================
+document.addEventListener('keydown', function(e) {
+    // 'H' key - Go Home
+    if (e.key === 'h' || e.key === 'H') {
+        if (!e.target.matches('input, textarea, select')) {
+            window.location.href = '{{ url_for("index") }}';
+        }
+    }
+    
+    // 'R' key - Reload (for 5xx errors)
+    if ((e.key === 'r' || e.key === 'R') && !e.ctrlKey && !e.metaKey) {
+        const errorCode = {{ error_code|default(500) }};
+        if (errorCode >= 500 && errorCode < 600) {
+            if (!e.target.matches('input, textarea, select')) {
+                location.reload();
+            }
+        }
+    }
+    
+    // 'B' key - Go Back
+    if (e.key === 'b' || e.key === 'B') {
+        if (!e.target.matches('input, textarea, select')) {
+            history.back();
+        }
+    }
+});
+
+// Show keyboard shortcuts hint
+console.log('🔑 Keyboard shortcuts: H=Home, B=Back, R=Refresh (5xx errors)');
+</script>
+
+{% endblock %}

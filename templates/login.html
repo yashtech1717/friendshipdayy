@@ -1,0 +1,474 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="page active" id="loginPage">
+    <!-- Login Container with Enhanced Styles -->
+    <div class="login-container">
+        <!-- Login Avatar with Ring Animation -->
+  
+        
+        <!-- Welcome Text -->
+        <h2 style="text-align: center; color: var(--text-secondary); margin-bottom: 5px; font-size: 28px;">
+            LAST MESSAGE
+        </h2>
+      
+        
+        <!-- Typing Animation Box -->
+        <div class="typingBox" style="margin-bottom: 25px; padding: 25px; border-radius: 16px;">
+            <p id="typingLogin" style="white-space: pre-wrap; word-break: break-word; font-size: 18px; line-height: 1.8; color: var(--text-secondary); font-style: italic; min-height: 60px;"></p>
+        </div>
+        
+        <!-- Login Form -->
+        <form method="post" id="loginForm" style="display: flex; flex-direction: column; gap: 18px;">
+            <!-- CSRF Token -->
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() if csrf_token else '' }}">
+            
+            <!-- Username Field -->
+            <div class="input-group">
+                <span class="input-icon">👤</span>
+                <input type="text" name="username" required 
+                       placeholder="Enter your username"
+                       autocomplete="username"
+                       class="login-input"
+                       id="usernameInput"
+                       value="{{ request.form.username if request.form else '' }}">
+            </div>
+            
+            <!-- Password Field -->
+            <div class="input-group">
+                <span class="input-icon">🔒</span>
+                <input type="password" name="password" required 
+                       placeholder="Enter your password"
+                       autocomplete="current-password"
+                       class="login-input"
+                       id="passwordInput">
+                <button type="button" onclick="togglePassword()" 
+                        class="password-toggle"
+                        aria-label="Toggle password visibility">
+                    👁️
+                </button>
+            </div>
+            
+            <!-- Password Strength Indicator -->
+            <div class="password-strength">
+                <div class="strength-fill"></div>
+            </div>
+            
+            <!-- Remember Me -->
+            <div style="display: flex; align-items: center; gap: 10px; margin-top: -5px;">
+                <input type="checkbox" name="remember" id="remember" 
+                       class="form-checkbox" 
+                       {% if request.form.remember %}checked{% endif %}>
+                <label for="remember" style="color: var(--text-muted); font-size: 14px; cursor: pointer;">
+                    Remember me
+                </label>
+            </div>
+            
+            <!-- Login Button -->
+            <button type="submit" class="btn btn-primary btn-lg btn-block" id="loginBtn">
+                <span class="icon-left">📖</span>
+                <span class="btn-text">Read Message</span>
+                <span class="btn-loading" style="display: none;">
+                    <span class="spinner"></span> Logging in...
+                </span>
+            </button>
+        </form>
+        
+        <!-- Demo Credentials -->
+        <div class="demo-card" style="text-align: center; margin-top: 20px; padding: 20px; border-radius: 16px; background: var(--bg-primary); box-shadow: var(--inset-shadow);">
+            <p style="color: var(--text-muted); font-size: 14px; margin: 0 0 5px 0;">
+                🔑 <strong style="color: var(--accent-blue);">Demo Access</strong>
+            </p>
+            <div style="display: flex; justify-content: center; gap: 20px; flex-wrap: wrap; margin-top: 8px;">
+                <div style="text-align: center;">
+                    <span style="color: var(--text-muted); font-size: 12px;">Username</span>
+                    <br>
+                    <strong style="color: var(--accent-blue); font-size: 14px;">Nickname</strong>
+                </div>
+                <div style="text-align: center;">
+                    <span style="color: var(--text-muted); font-size: 12px;">Password</span>
+                    <br>
+                    <strong style="color: var(--accent-blue); font-size: 14px;">Nickname</strong>
+                </div>
+            </div>
+            <p style="color: var(--text-muted); font-size: 12px; margin-top: 10px; font-style: italic;">
+                "Neku istam vunte ne login avvu quick fill click shesimread msg click chey"
+            </p>
+            <div style="margin-top: 10px;">
+                <button onclick="fillDemoCredentials()" class="btn btn-sm btn-outline" style="padding: 8px 20px; font-size: 12px;">
+                    ⚡ Quick Fill
+                </button>
+            </div>
+        </div>
+        
+        <!-- Help Link -->
+        <div style="text-align: center; margin-top: 15px;">
+            <p style="color: var(--text-muted); font-size: 12px;">
+                💡 Need help? Contact your administrator
+            </p>
+        </div>
+    </div>
+</div>
+
+<style>
+/* ============================================
+   LOGIN PAGE ENHANCED STYLES
+   ============================================ */
+#loginPage {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 60vh;
+    padding: 20px 0;
+}
+
+.typingBox {
+    max-width: 500px;
+    margin: 0 auto;
+    padding: 25px;
+    border-radius: 16px;
+    background: var(--bg-primary);
+    box-shadow: var(--inset-shadow);
+    transition: all var(--transition-speed) ease;
+}
+
+.typingBox p {
+    font-size: 18px;
+    line-height: 1.8;
+    color: var(--text-secondary);
+    min-height: 60px;
+    font-style: italic;
+    font-weight: 500;
+}
+
+/* Password Strength Indicator */
+.password-strength {
+    height: 4px;
+    margin-top: -5px;
+    border-radius: 10px;
+    background: var(--bg-primary);
+    box-shadow: inset 2px 2px 4px var(--shadow-light), inset -2px -2px 4px var(--shadow-dark);
+    overflow: hidden;
+    transition: all 0.3s ease;
+}
+
+.password-strength .strength-fill {
+    height: 100%;
+    width: 0%;
+    border-radius: 10px;
+    transition: width 0.3s ease;
+}
+
+.password-strength .strength-fill.weak { 
+    background: var(--accent-red); 
+    width: 33%; 
+}
+
+.password-strength .strength-fill.medium { 
+    background: var(--accent-yellow); 
+    width: 66%; 
+}
+
+.password-strength .strength-fill.strong { 
+    background: var(--accent-green); 
+    width: 100%; 
+}
+
+/* Form Checkbox */
+.form-checkbox {
+    transform: scale(1.2);
+    accent-color: var(--accent-blue);
+    cursor: pointer;
+}
+
+/* Demo Card Hover Effect */
+.demo-card {
+    transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    cursor: default;
+}
+
+.demo-card:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--card-shadow);
+}
+
+/* Quick Fill Button Animation */
+.btn-outline {
+    transition: all 0.3s ease;
+}
+
+.btn-outline:hover {
+    transform: translateY(-2px) scale(1.02);
+}
+
+/* ============================================
+   ANIMATIONS
+   ============================================ */
+@keyframes fadeInUp {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.login-container {
+    animation: fadeInUp 0.6s ease-out;
+}
+
+.input-group {
+    animation: fadeInUp 0.5s ease forwards;
+}
+
+.input-group:nth-child(1) { animation-delay: 0.1s; }
+.input-group:nth-child(2) { animation-delay: 0.2s; }
+#loginBtn { animation-delay: 0.3s; }
+.demo-card { animation-delay: 0.4s; }
+
+/* ============================================
+   RESPONSIVE
+   ============================================ */
+@media (max-width: 600px) {
+    .typingBox {
+        padding: 20px;
+        margin: 0 10px 20px 10px;
+    }
+    
+    .typingBox p {
+        font-size: 16px;
+        min-height: 50px;
+    }
+    
+    .login-container {
+        padding: 25px 20px !important;
+    }
+    
+    .login-avatar {
+        width: 70px !important;
+        height: 70px !important;
+        font-size: 30px !important;
+    }
+    
+    .login-avatar .avatar-ring {
+        width: 84px !important;
+        height: 84px !important;
+    }
+}
+
+@media (max-width: 400px) {
+    .typingBox {
+        padding: 15px;
+    }
+    
+    .typingBox p {
+        font-size: 14px;
+    }
+    
+    .login-container {
+        padding: 20px 15px !important;
+    }
+}
+</style>
+
+<script>
+// ============================================
+// TYPING ANIMATION (SAFE VERSION)
+// ============================================
+document.addEventListener('DOMContentLoaded', function() {
+    const text = 'Someone told me, "I\'ll never leave you."\nI always with you as a bestie.\n E roju aa never leave you person a best lesson ayyaru.';
+    const element = document.getElementById('typingLogin');
+    let i = 0;
+    let fullText = '';
+    const typingSpeed = 30;
+    
+    function typing() {
+        if (i < text.length) {
+            const char = text.charAt(i);
+            if (char === '\n') {
+                fullText += '\n';
+            } else {
+                fullText += char;
+            }
+            element.textContent = fullText;
+            i++;
+            
+            let delay = typingSpeed;
+            if (char === '.' || char === '!' || char === '?') {
+                delay = 300;
+            } else if (char === ',') {
+                delay = 100;
+            }
+            setTimeout(typing, delay);
+        }
+    }
+    
+    setTimeout(typing, 500);
+});
+
+// ============================================
+// TOGGLE PASSWORD VISIBILITY
+// ============================================
+function togglePassword() {
+    const passwordInput = document.getElementById('passwordInput');
+    const button = document.querySelector('.password-toggle');
+    
+    if (passwordInput.type === 'password') {
+        passwordInput.type = 'text';
+        button.textContent = '🙈';
+        button.setAttribute('aria-label', 'Hide password');
+    } else {
+        passwordInput.type = 'password';
+        button.textContent = '👁️';
+        button.setAttribute('aria-label', 'Show password');
+    }
+}
+
+// ============================================
+// PASSWORD STRENGTH INDICATOR
+// ============================================
+document.getElementById('passwordInput').addEventListener('input', function() {
+    const password = this.value;
+    const fillDiv = document.querySelector('.strength-fill');
+    
+    if (!fillDiv) return;
+    
+    let strength = 0;
+    if (password.length >= 8) strength++;
+    if (password.match(/[a-z]/)) strength++;
+    if (password.match(/[A-Z]/)) strength++;
+    if (password.match(/[0-9]/)) strength++;
+    if (password.match(/[^a-zA-Z0-9]/)) strength++;
+    
+    fillDiv.className = 'strength-fill';
+    if (password.length === 0) {
+        fillDiv.style.width = '0%';
+        return;
+    }
+    
+    if (strength <= 2) {
+        fillDiv.classList.add('weak');
+    } else if (strength <= 3) {
+        fillDiv.classList.add('medium');
+    } else {
+        fillDiv.classList.add('strong');
+    }
+});
+
+// ============================================
+// FORM SUBMISSION WITH LOADING STATE
+// ============================================
+document.getElementById('loginForm').addEventListener('submit', function(e) {
+    const btn = document.getElementById('loginBtn');
+    const textSpan = btn.querySelector('.btn-text');
+    const loadingSpan = btn.querySelector('.btn-loading');
+    
+    btn.disabled = true;
+    textSpan.style.display = 'none';
+    loadingSpan.style.display = 'flex';
+    loadingSpan.style.alignItems = 'center';
+    loadingSpan.style.gap = '10px';
+    
+    const username = document.getElementById('usernameInput').value;
+    if (username) {
+        localStorage.setItem('saved_username', username);
+    }
+});
+
+// ============================================
+// RESTORE SAVED USERNAME
+// ============================================
+document.addEventListener('DOMContentLoaded', function() {
+    const savedUsername = localStorage.getItem('saved_username');
+    if (savedUsername) {
+        const usernameInput = document.getElementById('usernameInput');
+        if (usernameInput && !usernameInput.value) {
+            usernameInput.value = savedUsername;
+        }
+    }
+});
+
+// ============================================
+// QUICK FILL DEMO CREDENTIALS
+// ============================================
+function fillDemoCredentials() {
+    const usernameInput = document.getElementById('usernameInput');
+    const passwordInput = document.getElementById('passwordInput');
+    
+    usernameInput.value = 'lory';
+    passwordInput.value = 'lory';
+    
+    // Trigger strength indicator
+    passwordInput.dispatchEvent(new Event('input'));
+    
+    // Visual feedback
+    const btn = event.target;
+    const originalText = btn.textContent;
+    btn.textContent = '✅ Filled!';
+    btn.style.background = 'var(--accent-green)';
+    btn.style.color = 'white';
+    
+    setTimeout(() => {
+        btn.textContent = originalText;
+        btn.style.background = '';
+        btn.style.color = '';
+    }, 1500);
+    
+    showToast('✅ Demo credentials filled! Click "Read Message" to login.', 'success');
+}
+
+// ============================================
+// KEYBOARD SHORTCUTS
+// ============================================
+document.addEventListener('keydown', function(e) {
+    if (e.key === 'Enter' && !e.shiftKey) {
+        const activeElement = document.activeElement;
+        if (activeElement && activeElement.tagName === 'INPUT' && 
+            (activeElement.id === 'usernameInput' || activeElement.id === 'passwordInput')) {
+            e.preventDefault();
+            document.getElementById('loginForm').submit();
+        }
+    }
+});
+
+// ============================================
+// AUTO-FOCUS
+// ============================================
+document.addEventListener('DOMContentLoaded', function() {
+    const usernameInput = document.getElementById('usernameInput');
+    if (usernameInput) {
+        setTimeout(() => usernameInput.focus(), 800);
+    }
+});
+
+// ============================================
+// SHAKE ANIMATION FOR ERRORS
+// ============================================
+document.addEventListener('DOMContentLoaded', function() {
+    const flashMessages = document.querySelectorAll('.flash-message.danger');
+    flashMessages.forEach(function(msg) {
+        if (msg.textContent.includes('Invalid username or password')) {
+            const form = document.getElementById('loginForm');
+            form.style.animation = 'shake 0.5s ease';
+            setTimeout(() => {
+                form.style.animation = '';
+            }, 500);
+        }
+    });
+});
+
+// Shake animation
+const style = document.createElement('style');
+style.textContent = `
+    @keyframes shake {
+        0%, 100% { transform: translateX(0); }
+        10%, 30%, 50%, 70%, 90% { transform: translateX(-5px); }
+        20%, 40%, 60%, 80% { transform: translateX(5px); }
+    }
+`;
+document.head.appendChild(style);
+</script>
+{% endblock %}
