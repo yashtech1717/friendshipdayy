@@ -1,7 +1,7 @@
 # ============================================================
 # YASH WORLD - Premium Survey Application
 # Flask Version - Production Ready for Render
-# Enhanced with Proper Cascade Deletion
+# WITH PROPER DATABASE PERSISTENCE
 # ============================================================
 
 import os
@@ -29,16 +29,35 @@ logger = logging.getLogger(__name__)
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'yash-world-secret-key-2024')
 
-# Database configuration
-database_url = os.environ.get('DATABASE_URL')
-if database_url:
-    if database_url.startswith('postgres://'):
-        database_url = database_url.replace('postgres://', 'postgresql://', 1)
-    app.config['SQLALCHEMY_DATABASE_URI'] = database_url
-else:
+# ============================================================
+# DATABASE CONFIGURATION - PERSISTENT STORAGE
+# ============================================================
+
+# Check if we're on Render (production)
+IS_RENDER = os.environ.get('RENDER', False)
+DATABASE_URL = os.environ.get('DATABASE_URL')
+
+if DATABASE_URL:
+    # Use PostgreSQL (persistent)
+    if DATABASE_URL.startswith('postgres://'):
+        DATABASE_URL = DATABASE_URL.replace('postgres://', 'postgresql://', 1)
+    app.config['SQLALCHEMY_DATABASE_URI'] = DATABASE_URL
+    logger.info("✅ Using PostgreSQL database (persistent)")
+elif IS_RENDER:
+    # On Render but no DATABASE_URL - error
+    logger.error("❌ DATABASE_URL not set on Render! Please add it in environment variables.")
     app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///survey.db'
+    logger.warning("⚠️ Using SQLite on Render - DATA WILL NOT PERSIST!")
+else:
+    # Local development
+    app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///survey.db'
+    logger.info("ℹ️ Using SQLite for local development")
 
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
+    'pool_pre_ping': True,
+    'pool_recycle': 300,
+}
 
 # File upload configuration
 UPLOAD_FOLDER = 'media'
@@ -53,7 +72,7 @@ app.config['MAX_CONTENT_LENGTH'] = 100 * 1024 * 1024  # 100MB max
 app.config['SESSION_COOKIE_SECURE'] = os.environ.get('SESSION_COOKIE_SECURE', 'False') == 'True'
 app.config['SESSION_COOKIE_HTTPONLY'] = True
 app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
-app.config['PERMANENT_SESSION_LIFETIME'] = 86400  # 24 hours
+app.config['PERMANENT_SESSION_LIFETIME'] = 86400
 
 # ============================================================
 # CREATE FOLDERS
@@ -146,7 +165,6 @@ class Question(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
-    # Relationships with cascade delete
     options = db.relationship('QuestionOption', backref='question', cascade='all, delete-orphan', lazy=True)
     two_marks_answer = db.relationship('TwoMarksAnswer', backref='question', cascade='all, delete-orphan', uselist=False)
     responses = db.relationship('UserResponse', backref='question', cascade='all, delete-orphan', lazy=True)
@@ -258,7 +276,6 @@ def save_audio(file, subfolder='audio'):
     return save_file(file, subfolder, ALLOWED_AUDIO)
 
 def delete_media_file(file_path):
-    """Delete a media file from the server"""
     if file_path:
         full_path = os.path.join(app.config['UPLOAD_FOLDER'], file_path)
         if os.path.exists(full_path):
@@ -343,7 +360,7 @@ def logout():
     return redirect(url_for('login'))
 
 # ============================================================
-# ROUTES - USER SURVEY
+# ROUTES - USER SURVEY (Same as before)
 # ============================================================
 
 @app.route('/survey')
@@ -815,7 +832,6 @@ def admin_edit_question(question_id):
         question.order = int(request.form.get('order', 0))
         
         if 'image' in request.files and request.files['image'].filename:
-            # Delete old image
             if question.image:
                 delete_media_file(question.image)
             path = save_image(request.files['image'], 'questions/images')
@@ -857,7 +873,6 @@ def admin_delete_question(question_id):
     try:
         question = Question.query.get_or_404(question_id)
         
-        # Delete associated media files
         if question.image:
             delete_media_file(question.image)
         if question.video:
@@ -865,7 +880,6 @@ def admin_delete_question(question_id):
         if question.audio:
             delete_media_file(question.audio)
         
-        # Delete options and their media
         options = QuestionOption.query.filter_by(question_id=question_id).all()
         for option in options:
             if option.image:
@@ -873,7 +887,6 @@ def admin_delete_question(question_id):
             if option.video:
                 delete_media_file(option.video)
         
-        # Delete 2 marks answer and its media
         two_marks = TwoMarksAnswer.query.filter_by(question_id=question_id).first()
         if two_marks:
             if two_marks.image:
@@ -883,10 +896,8 @@ def admin_delete_question(question_id):
             if two_marks.audio:
                 delete_media_file(two_marks.audio)
         
-        # Delete all responses for this question
         UserResponse.query.filter_by(question_id=question_id).delete()
         
-        # Delete the question (cascade will delete options and 2 marks)
         db.session.delete(question)
         db.session.commit()
         
@@ -940,7 +951,6 @@ def admin_delete_option(option_id):
     option = QuestionOption.query.get_or_404(option_id)
     question_id = option.question_id
     
-    # Delete media files
     if option.image:
         delete_media_file(option.image)
     if option.video:
@@ -1049,7 +1059,6 @@ def admin_add_music():
 def admin_delete_music(track_id):
     track = BackgroundMusic.query.get_or_404(track_id)
     
-    # Delete the file
     if track.file_path:
         delete_media_file(track.file_path)
     
@@ -1152,47 +1161,67 @@ def forbidden(error):
 
 def init_db():
     with app.app_context():
-        db.create_all()
-        
-        # Create admin user
-        admin = User.query.filter_by(username='admin').first()
-        if not admin:
-            admin = User(username='admin', is_admin=True)
-            admin.set_password('admin123')
-            db.session.add(admin)
-            db.session.commit()
-            logger.info("✅ Admin user created: admin / admin123")
-        
-        # Create test user
-        lory = User.query.filter_by(username='lory').first()
-        if not lory:
-            lory = User(username='lory', is_admin=False)
-            lory.set_password('lory')
-            db.session.add(lory)
-            db.session.commit()
-            logger.info("✅ Test user created: lory / lory")
-        
-        # Create default settings
-        settings = SiteSettings.query.first()
-        if not settings:
-            settings = SiteSettings(
-                site_title='YASH WORLD',
-                site_tagline='Premium Survey Application',
-                enable_music=True,
-                enable_typing=True
-            )
-            db.session.add(settings)
-            db.session.commit()
-            logger.info("✅ Default settings created")
-        
-        logger.info("\n" + "="*50)
-        logger.info("🚀 YASH WORLD Survey Application")
-        logger.info("="*50)
-        logger.info("📍 Server running at: http://localhost:5000")
-        logger.info("🔑 Admin Login: admin / admin123")
-        logger.info("👤 User Login: lory / lory")
-        logger.info("⚠️  All content is stored permanently until deleted")
-        logger.info("="*50 + "\n")
+        try:
+            # Create tables
+            db.create_all()
+            logger.info("✅ Database tables created/verified")
+            
+            # Create admin user
+            admin = User.query.filter_by(username='admin').first()
+            if not admin:
+                admin = User(username='admin', is_admin=True)
+                admin.set_password('admin123')
+                db.session.add(admin)
+                db.session.commit()
+                logger.info("✅ Admin user created: admin / admin123")
+            else:
+                logger.info("✅ Admin user already exists")
+            
+            # Create test user
+            lory = User.query.filter_by(username='lory').first()
+            if not lory:
+                lory = User(username='lory', is_admin=False)
+                lory.set_password('lory')
+                db.session.add(lory)
+                db.session.commit()
+                logger.info("✅ Test user created: lory / lory")
+            else:
+                logger.info("✅ Test user already exists")
+            
+            # Create default settings
+            settings = SiteSettings.query.first()
+            if not settings:
+                settings = SiteSettings(
+                    site_title='YASH WORLD',
+                    site_tagline='Premium Survey Application',
+                    enable_music=True,
+                    enable_typing=True
+                )
+                db.session.add(settings)
+                db.session.commit()
+                logger.info("✅ Default settings created")
+            else:
+                logger.info("✅ Settings already exist")
+            
+            # Count existing data
+            question_count = Question.query.count()
+            typing_count = TypingText.query.count()
+            music_count = BackgroundMusic.query.count()
+            
+            logger.info(f"📊 Existing data: {question_count} questions, {typing_count} typing texts, {music_count} music tracks")
+            
+            logger.info("\n" + "="*50)
+            logger.info("🚀 YASH WORLD Survey Application")
+            logger.info("="*50)
+            logger.info(f"📊 Database: {app.config['SQLALCHEMY_DATABASE_URI']}")
+            logger.info(f"💾 Data Persistence: {'✅ YES (PostgreSQL)' if DATABASE_URL else '⚠️ NO (SQLite)'}")
+            logger.info("🔑 Admin Login: admin / admin123")
+            logger.info("👤 User Login: lory / lory")
+            logger.info("="*50 + "\n")
+            
+        except Exception as e:
+            logger.error(f"❌ Database initialization error: {e}")
+            db.session.rollback()
 
 # ============================================================
 # RUN THE APPLICATION
